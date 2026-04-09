@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow, noarchive">
-<title>전사참여제 통합 관리 시스템</title>
+<title>전사참여제 실시간 통합 관리 시스템</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -35,14 +37,12 @@
   td{padding:12px 14px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis;}
   .col-cat{width:75px; text-align:center;}
   .col-info{width:180px;}
-  .col-team{width:auto;}
   .recv-btn{width:32px; height:32px; border-radius:8px; border:1.5px solid var(--brand-border); background:#fff; cursor:pointer; font-weight:700; display:flex; align-items:center; justify-content:center; margin: 0 auto;}
   .recv-btn.yes{background:var(--brand-faint); border-color:var(--brand-primary); color:var(--brand-primary);}
   .grid{display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:20px;}
   .card{background:#fff; padding:20px; border-radius:16px; border:1px solid var(--brand-border); box-shadow:0 4px 6px rgba(0,0,0,0.02)}
   .card h3{font-size:14px; color:var(--brand-dark); margin-bottom:15px; font-weight:700; border-bottom: 1px solid var(--brand-border); padding-bottom:10px;}
-  .drop-zone{background:#fff;padding:100px 40px;text-align:center;border:3px dashed var(--brand-border);border-radius:24px;margin-bottom:20px;cursor:pointer;transition:background 0.2s;}
-  .drop-zone.over{background:var(--brand-faint); border-color:var(--brand-primary);}
+  .drop-zone{background:#fff;padding:100px 40px;text-align:center;border:3px dashed var(--brand-border);border-radius:24px;margin-bottom:20px;cursor:pointer;}
   .mo{display:none;position:fixed;inset:0;background:rgba(30,41,45,0.8);z-index:200;align-items:center;justify-content:center;backdrop-filter: blur(4px)}
   .mo.show{display:flex}
   .mbox{background:#fff;padding:32px;border-radius:24px;width:90%;max-width:400px;text-align:center}
@@ -53,10 +53,7 @@
 <body>
 
 <header>
-  <div>
-    <h1>전사참여제 통합 관리 시스템</h1>
-    <div id="last-update-display" class="update-time">최근 업데이트: 없음</div>
-  </div>
+  <div><h1>전사참여제 통합 관리</h1><div id="last-update-display" class="update-time">최근 업데이트: 데이터 로드 중...</div></div>
   <div style="color:#fff; font-size:12px; font-weight:600;">대학내일 인재성장팀</div>
 </header>
 
@@ -77,7 +74,6 @@
   <div style="display:flex; gap:8px; margin-bottom:15px;">
     <input id="q" type="text" placeholder="성명, 사번, 활동명 검색..." oninput="render()" style="flex:1; padding:14px; border:2px solid var(--brand-border); border-radius:12px; outline:none;">
     <button style="background:var(--brand-dark); color:#fff; border:none; padding:0 20px; border-radius:12px; font-weight:700; cursor:pointer;" onclick="bulkAction(true)">일괄 수령</button>
-    <button style="background:#fff; border:1px solid var(--brand-border); padding:0 20px; border-radius:12px; cursor:pointer;" onclick="bulkAction(false)">일괄 취소</button>
   </div>
   <div style="display:flex; gap:8px; margin-bottom:15px;">
     <button class="filter-btn active" id="f-all" onclick="setFilter('all', this)" style="padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--brand-border); background:#fff;">전체</button>
@@ -86,7 +82,7 @@
   </div>
   <div class="t-wrap">
     <table>
-      <thead><tr><th class="col-info">성명(사번)</th><th class="col-team">팀 / 직책</th><th class="col-cat">농부</th><th class="col-cat">스님</th><th class="col-cat">주장</th><th class="col-cat">제비</th><th class="col-cat">키다리</th></tr></thead>
+      <thead><tr><th class="col-info">성명(사번)</th><th style="width:auto">팀 / 직책</th><th class="col-cat">농부</th><th class="col-cat">스님</th><th class="col-cat">주장</th><th class="col-cat">제비</th><th class="col-cat">키다리</th></tr></thead>
       <tbody id="list"></tbody>
     </table>
   </div>
@@ -95,11 +91,11 @@
 <div id="stocks" class="content-section"><div class="grid" id="stock-grid"></div></div>
 <div id="stats" class="content-section"></div>
 <div id="projects" class="content-section">
-  <div class="t-wrap"><table><thead><tr><th>카테고리</th><th>프로젝트 명</th><th style="text-align:right; width:100px;">참여 인원</th></tr></thead><tbody id="proj-list"></tbody></table></div>
-  <div id="project-detail-panel" style="margin-top:30px; padding:24px; background:var(--brand-faint); border-radius:20px; display:none; border:1px solid var(--brand-light);">
+  <div class="t-wrap"><table><thead><tr><th>카테고리</th><th>프로젝트 명</th><th style="text-align:right; width:100px;">참원</th></tr></thead><tbody id="proj-list"></tbody></table></div>
+  <div id="project-detail-panel" style="margin-top:30px; padding:24px; background:var(--brand-faint); border-radius:20px; display:none;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h3 id="detail-title"></h3>
-      <div style="display:flex; gap:8px;"><button class="btn btn-dark" style="background:var(--brand-dark); color:#fff; padding:10px 16px; border-radius:10px; border:none; font-weight:700; cursor:pointer;" id="detail-bulk-ok">일괄 수령</button><button class="btn btn-outline" style="background:#fff; border:1px solid var(--brand-border); padding:10px 16px; border-radius:10px; cursor:pointer;" id="detail-bulk-no">일괄 취소</button></div>
+      <div style="display:flex; gap:8px;"><button class="btn btn-dark" id="detail-bulk-ok" style="background:var(--brand-dark); color:#fff; border:none; padding:10px 16px; border-radius:10px; cursor:pointer; font-weight:700;">일괄 수령</button><button id="detail-bulk-no" style="background:#fff; border:1px solid var(--brand-border); padding:10px 16px; border-radius:10px; cursor:pointer;">일괄 취소</button></div>
     </div>
     <div class="t-wrap"><table><thead><tr><th>성명(사번)</th><th>부서 / 직책</th><th class="col-cat">수령</th></tr></thead><tbody id="detail-list"></tbody></table></div>
   </div>
@@ -107,52 +103,56 @@
 
 <div id="upload" class="content-section">
   <div class="drop-zone" id="drop-zone" onclick="document.getElementById('excelFile').click()">
-    <h2>📁 엑셀 파일을 드래그하거나 클릭하여 업로드</h2>
-    <p style="color:var(--text-muted); margin-top:10px;">기존 데이터는 유지되며 새로운 명단이 추가됩니다.</p>
+    <h2>📁 엑셀 데이터 클라우드 업로드</h2>
+    <p style="color:var(--text-muted); margin-top:10px;">데이터는 클라우드에 영구 저장됩니다.</p>
     <input type="file" id="excelFile" accept=".xlsx, .xls" style="display:none" onchange="handleFile(this.files[0])">
   </div>
   <div style="display:flex; justify-content:center; gap:12px; margin-top:20px;">
-    <button onclick="exportToExcel()" style="background:var(--brand-primary); color:#fff; border:none; padding:12px 24px; border-radius:10px; cursor:pointer; font-weight:700; box-shadow: 0 4px 10px rgba(0,177,204,0.2)">📥 현재 데이터 엑셀 다운로드</button>
-    <button onclick="if(confirm('모든 데이터를 초기화하시겠습니까?')){localStorage.clear();location.reload();}" style="color:var(--red); border:1px solid var(--red); background:none; padding:12px 24px; border-radius:10px; cursor:pointer; font-weight:700;">⚠️ 전체 데이터 초기화</button>
+    <button onclick="exportToExcel()" style="background:var(--brand-primary); color:#fff; border:none; padding:12px 24px; border-radius:10px; cursor:pointer; font-weight:700;">📥 현재 데이터 엑셀 다운로드</button>
+    <button onclick="clearCloudData()" style="color:var(--red); border:1px solid var(--red); background:none; padding:12px 24px; border-radius:10px; cursor:pointer; font-weight:700;">⚠️ 전체 데이터 초기화</button>
   </div>
 </div>
 
-<div class="mo" id="mo">
-  <div class="mbox">
-    <h3 id="m-title">수령 확인</h3>
-    <p id="m-body" style="margin:10px 0; font-size:14px; color:var(--text-muted)"></p>
-    <div id="proj-selector" style="margin:15px 0; text-align:left;"></div>
-    <div style="display:flex; gap:10px; margin-top:24px;">
-      <button onclick="closeMo()" style="flex:1; padding:14px; border:none; border-radius:10px; background:var(--brand-bg); cursor:pointer">취소</button>
-      <button id="m-ok" style="flex:1; padding:14px; border:none; border-radius:10px; background:var(--brand-primary); color:#fff; cursor:pointer; font-weight:700">확인</button>
-    </div>
-  </div>
-</div>
+<div class="mo" id="mo"><div class="mbox"><h3 id="m-title">수령 확인</h3><p id="m-body" style="margin:10px 0; font-size:14px; color:var(--text-muted)"></p><div id="proj-selector" style="margin:15px 0; text-align:left;"></div><div style="display:flex; gap:10px; margin-top:24px;"><button onclick="closeMo()" style="flex:1; padding:14px; border:none; border-radius:10px; background:var(--brand-bg); cursor:pointer">취소</button><button id="m-ok" style="flex:1; padding:14px; border:none; border-radius:10px; background:var(--brand-primary); color:#fff; cursor:pointer; font-weight:700">확인</button></div></div></div>
 
 <script>
+// 현진님 전용 Firebase 설정 적용
+const firebaseConfig = {
+  apiKey: "AIzaSyACx0czE3YcmMWBg9hcECAr-aXlXBhMtmo",
+  authDomain: "goods-d0606.firebaseapp.com",
+  projectId: "goods-d0606",
+  storageBucket: "goods-d0606.firebasestorage.app",
+  messagingSenderId: "182215457568",
+  appId: "1:182215457568:web:f28d3309d08a872a2c7545"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 const CATS = ['농부', '스님', '주장', '제비', '키다리'];
-let RAW_DATA = JSON.parse(localStorage.getItem('goods_raw')) || []; 
-let state = JSON.parse(localStorage.getItem('goods_state')) || {};
-let stocks = JSON.parse(localStorage.getItem('goods_stocks')) || { '농부':0, '스님':0, '주장':0, '제비':0, '키다리':0 };
-let currentFilter = 'all';
+let RAW_DATA = []; let state = {}; let stocks = { '농부':0, '스님':0, '주장':0, '제비':0, '키다리':0 }; let lastUpdate = "데이터 없음"; let currentFilter = 'all';
+
+function initRealtimeSync() {
+  db.collection("config").doc("app_state").onSnapshot(doc => {
+    if (doc.exists()) {
+      const d = doc.data();
+      RAW_DATA = d.raw || []; state = d.state || {}; stocks = d.stocks || stocks; lastUpdate = d.lastUpdate || "데이터 없음";
+      render();
+    } else {
+      document.getElementById('last-update-display').textContent = `최근 업데이트: 데이터 없음`;
+    }
+  });
+}
+initRealtimeSync();
+
+async function syncToCloud() { await db.collection("config").doc("app_state").set({ raw: RAW_DATA, state, stocks, lastUpdate }); }
 
 function esc(str) { if (!str) return ""; return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
 function unesc(str) { if (!str) return ""; return String(str).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#039;/g, "'"); }
 
-const dropZone = document.getElementById('drop-zone');
-['dragover', 'dragleave', 'drop'].forEach(evt => {
-  dropZone.addEventListener(evt, e => {
-    e.preventDefault(); e.stopPropagation();
-    if (evt === 'dragover') dropZone.classList.add('over');
-    else dropZone.classList.remove('over');
-    if (evt === 'drop' && e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
-  });
-});
-
 function handleFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
     const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: ""});
     json.forEach(row => {
@@ -162,43 +162,35 @@ function handleFile(file) {
       const cat = String(row[fk('카테고리')] || "").trim();
       if (!empId || !cat) return;
       let p = RAW_DATA.find(x => x.empId === empId);
-      if (!p) {
-        p = { empId, name: row[fk('성명')] || "", company, dept: row[fk('부서')] || "", position: row[fk('직책')] || "", categories: [], projects: {} };
-        RAW_DATA.push(p);
-      } else if (p.company === "미지정" && company !== "미지정") p.company = company;
+      if (!p) { p = { empId, name: row[fk('성명')]||"", company, dept: row[fk('부서')]||"", position: row[fk('직책')]||"", categories: [], projects: {} }; RAW_DATA.push(p); }
       if (!p.categories.includes(cat)) p.categories.push(cat);
       const pj = String(row[fk('프로젝트명')] || "").trim();
-      if (!p.projects[cat]) p.projects[cat] = [];
-      if (pj && !p.projects[cat].includes(pj)) p.projects[cat].push(pj);
-      if (!state[empId]) state[empId] = {};
-      if (!state[empId][cat]) state[empId][cat] = { isDone: false, evidence: "" };
+      if (!p.projects[cat]) p.projects[cat] = []; if (pj && !p.projects[cat].includes(pj)) p.projects[cat].push(pj);
+      if (!state[empId]) state[empId] = {}; if (!state[empId][cat]) state[empId][cat] = { isDone: false, evidence: "" };
     });
-    const now = new Date();
-    const updateTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    localStorage.setItem('goods_last_update', updateTime);
-    save(); render(); alert("데이터 업데이트 완료"); openTab('manage');
+    const now = new Date(); lastUpdate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    await syncToCloud(); alert("클라우드 업데이트 완료!"); openTab('manage');
   };
   reader.readAsArrayBuffer(file);
 }
 
 function render() {
-  const lastUpdate = localStorage.getItem('goods_last_update') || "없음";
   document.getElementById('last-update-display').textContent = `최근 업데이트: ${lastUpdate}`;
   const q = document.getElementById('q').value.toLowerCase();
   let filtered = RAW_DATA.filter(p => {
     const projs = Object.values(p.projects).flat().join(' ').toLowerCase();
     return (p.name||"").toLowerCase().includes(q) || (p.empId||"").toLowerCase().includes(q) || projs.includes(q);
   });
-  if (currentFilter === 'done') filtered = filtered.filter(p => p.categories.some(c => state[p.empId][c].isDone));
-  if (currentFilter === 'none') filtered = filtered.filter(p => p.categories.some(c => !state[p.empId][c].isDone));
+  if (currentFilter === 'done') filtered = filtered.filter(p => p.categories.some(c => state[p.empId] && state[p.empId][c].isDone));
+  if (currentFilter === 'none') filtered = filtered.filter(p => p.categories.some(c => state[p.empId] && !state[p.empId][c].isDone));
 
   document.getElementById('list').innerHTML = filtered.map(p => {
     const cells = CATS.map(c => {
       if(!p.categories.includes(c)) return `<td class="col-cat" style="opacity:0.1">○</td>`;
-      const s = state[p.empId][c];
-      return `<td class="col-cat"><button class="recv-btn ${s.isDone?'yes':''}" title="${esc(s.isDone ? '수령항목: ' + s.evidence : '미수령')}" onclick="openRecvModal('${p.empId}','${c}')">${s.isDone?'✓':'○'}</button></td>`;
+      const s = (state[p.empId] && state[p.empId][c]) ? state[p.empId][c] : {isDone:false};
+      return `<td class="col-cat"><button class="recv-btn ${s.isDone?'yes':''}" onclick="openRecvModal('${p.empId}','${c}')">${s.isDone?'✓':'○'}</button></td>`;
     }).join('');
-    return `<tr><td class="col-info"><strong>${esc(p.name)}</strong><br><small>${p.empId}</small></td><td class="col-team"><small>${esc(p.dept)}</small><br>${esc(p.position)}</td>${cells}</tr>`;
+    return `<tr><td class="col-info"><strong>${esc(p.name)}</strong><br><small>${p.empId}</small></td><td><small>${esc(p.dept)}</small><br>${esc(p.position)}</td>${cells}</tr>`;
   }).join('');
   updateAllInfo();
 }
@@ -206,45 +198,37 @@ function render() {
 function updateAllInfo() {
   let t = 0, d = 0; RAW_DATA.forEach(p => p.categories.forEach(c => { t++; if(state[p.empId] && state[p.empId][c] && state[p.empId][c].isDone) d++; }));
   document.getElementById('total-n').textContent = t; document.getElementById('done-n').textContent = d; document.getElementById('pend-n').textContent = t - d;
-  
   document.getElementById('stock-grid').innerHTML = CATS.map(c => {
-    const col = RAW_DATA.filter(p => p.categories.includes(c) && state[p.empId][c] && state[p.empId][c].isDone).length;
+    const col = RAW_DATA.filter(p => p.categories.includes(c) && state[p.empId] && state[p.empId][c].isDone).length;
     const req = RAW_DATA.filter(p => p.categories.includes(c)).length;
-    return `<div class="card"><h3>${c} 마그넷</h3><div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>보유량</span><input type="number" value="${stocks[c]}" onchange="stocks['${c}']=Number(this.value); save(); updateAllInfo();" style="width:50px; text-align:right;"></div><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;"><span>수령 완료</span><strong>${col}</strong></div><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px;"><span>미수령 인원</span><strong>${req-col}</strong></div><div style="display:flex; justify-content:space-between; margin-top:10px; font-weight:700; color:var(--brand-primary); border-top:1px dashed var(--brand-border); padding-top:10px;"><span>잔여 재고</span><span>${stocks[c]-col}</span></div></div>`;
+    return `<div class="card"><h3>${c} 마그넷</h3><div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>보유량</span><input type="number" value="${stocks[c]}" onchange="stocks['${c}']=Number(this.value); syncToCloud();" style="width:50px; text-align:right;"></div><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;"><span>수령 완료</span><strong>${col}</strong></div><div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px;"><span>미수령 인원</span><strong>${req-col}</strong></div><div style="display:flex; justify-content:space-between; margin-top:10px; font-weight:700; color:var(--brand-primary); border-top:1px dashed var(--brand-border); padding-top:10px;"><span>잔여 재고</span><span>${stocks[c]-col}</span></div></div>`;
   }).join('');
-
   const statsTab = document.getElementById('stats');
-  const allComp = RAW_DATA.filter(p => p.categories.length === 5);
-  let statsHtml = `<h2 style="margin-bottom:20px;">🔥 참여 데이터 분석</h2><div class="card" style="margin-bottom:24px; border-left: 5px solid var(--brand-primary);"><h3>🏆 전관왕 현황 (5개 참여)</h3><div style="font-size:18px; font-weight:700; color:var(--brand-primary); margin-bottom:12px;">총 ${allComp.length}명</div><div style="display:flex; flex-wrap:wrap; gap:8px;">${allComp.length > 0 ? allComp.map(p => `<span style="background:var(--brand-faint); padding:4px 12px; border-radius:20px; font-size:12px;">${esc(p.name)}</span>`).join('') : '없음'}</div></div><div class="grid">`;
-  
+  let statsHtml = `<h2 style="margin-bottom:20px;">🔥 참여 데이터 분석</h2><div class="grid">`;
   CATS.forEach(cat => {
-    const pts = RAW_DATA.filter(p => p.categories.includes(cat));
-    const total = pts.length;
+    const pts = RAW_DATA.filter(p => p.categories.includes(cat)); const total = pts.length;
     const coMap = {}; pts.forEach(p => { const c = p.company || "미지정"; coMap[c] = (coMap[c] || 0) + 1; });
     const posMap = {}; pts.forEach(p => { const pos = p.position || "미지정"; posMap[pos] = (posMap[pos] || 0) + 1; });
-    statsHtml += `<div class="card"><h3>${cat} 분석 (총 ${total}명)</h3><div style="margin-bottom:20px;"><div style="font-weight:700; font-size:12px; margin-bottom:10px; color:var(--text-muted)">🏢 회사별 (A열)</div>${Object.entries(coMap).sort((a,b)=>b[1]-a[1]).map(([n, c]) => `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;"><span>${esc(n)}</span><span>${c}명 (${Math.round(c/total*100)}%)</span></div><div style="height:4px; background:var(--brand-border); margin-bottom:8px; overflow:hidden;"><div style="height:100%; background:var(--brand-primary); width:${c/total*100}%"></div></div>`).join('')}</div><div><div style="font-weight:700; font-size:12px; margin-bottom:10px; color:var(--text-muted)">💼 직책별 참여 비율</div>${Object.entries(posMap).sort((a,b)=>b[1]-a[1]).map(([n, c]) => `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${esc(n)}</span><span>${c}명 (${Math.round(c/total*100)}%)</span></div>`).join('')}</div></div>`;
+    statsHtml += `<div class="card"><h3>${cat} 분석 (총 ${total}명)</h3><div style="margin-bottom:20px;"><div style="font-weight:700; font-size:12px; margin-bottom:10px; color:var(--text-muted)">🏢 회사별 (A열)</div>${Object.entries(coMap).sort((a,b)=>b[1]-a[1]).map(([n, c]) => `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;"><span>${esc(n)}</span><span>${c}명 (${Math.round(c/total*100)}%)</span></div><div style="height:4px; background:var(--brand-border); margin-bottom:8px; overflow:hidden;"><div style="height:100%; background:var(--brand-primary); width:${c/total*100}%"></div></div>`).join('')}</div><div><div style="font-weight:700; font-size:12px; margin-bottom:10px; color:var(--text-muted)">💼 직책별 참여 비율</div>${Object.entries(posMap).sort((a,b)=>b[1]-a[1]).map(([n, c]) => `<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;"><span>${esc(n)}</span><span>${c}명</span></div>`).join('')}</div></div>`;
   });
   statsTab.innerHTML = statsHtml + `</div>`;
-
   const pMap = {}; RAW_DATA.forEach(p => Object.entries(p.projects).forEach(([cat, names]) => names.forEach(n => { if(!pMap[n]) pMap[n]={cat, count:0}; pMap[n].count++; })));
   document.getElementById('proj-list').innerHTML = Object.entries(pMap).sort((a,b)=>b[1].count-a[1].count).map(([n,i]) => `<tr style="cursor:pointer" onclick="showProjDetail('${esc(n)}', '${i.cat}')"><td><span style="color:var(--brand-primary); font-weight:700;">${i.cat}</span></td><td>${esc(n)}</td><td style="text-align:right"><strong>${i.count}</strong> 명</td></tr>`).join('');
 }
 
 function openRecvModal(empId, cat) {
-  const p = RAW_DATA.find(x => x.empId === empId);
-  const s = state[empId][cat];
-  const selector = document.getElementById('proj-selector');
-  const okBtn = document.getElementById('m-ok');
+  const p = RAW_DATA.find(x => x.empId === empId); const s = (state[empId] && state[empId][cat]) ? state[empId][cat] : {isDone:false};
+  const selector = document.getElementById('proj-selector'); const okBtn = document.getElementById('m-ok');
   if (s.isDone) {
     document.getElementById('m-body').innerHTML = `이미 <strong>[${esc(s.evidence)}]</strong> 건으로 수령하였습니다. 취소하시겠습니까?`;
     selector.innerHTML = ""; okBtn.style.background = "var(--red)"; okBtn.textContent = "수령 취소";
-    okBtn.onclick = () => { state[empId][cat] = {isDone:false, evidence:""}; save(); closeMo(); render(); };
+    okBtn.onclick = async () => { state[empId][cat] = {isDone:false, evidence:""}; await syncToCloud(); closeMo(); };
   } else {
     document.getElementById('m-body').innerHTML = `수령할 활동을 선택해주세요.`;
     const projs = p.projects[cat] || []; let sel = projs[0] || "기타";
     selector.innerHTML = projs.map(proj => `<div class="proj-opt ${proj===sel?'selected':''}" onclick="sel='${proj}'; document.querySelectorAll('.proj-opt').forEach(el=>el.classList.remove('selected')); this.classList.add('selected');">${esc(proj)}</div>`).join('');
     okBtn.style.background = "var(--brand-primary)"; okBtn.textContent = "수령 완료";
-    okBtn.onclick = () => { state[empId][cat] = {isDone:true, evidence:sel}; save(); closeMo(); render(); };
+    okBtn.onclick = async () => { state[empId][cat] = {isDone:true, evidence:sel}; await syncToCloud(); closeMo(); };
   }
   document.getElementById('mo').classList.add('show');
 }
@@ -254,71 +238,50 @@ function showProjDetail(name, cat) {
   document.getElementById('detail-title').textContent = `📍 ${name} 명단`;
   const members = RAW_DATA.filter(p => p.projects[cat] && p.projects[cat].includes(name));
   document.getElementById('detail-list').innerHTML = members.map(p => {
-    const s = state[p.empId][cat];
+    const s = (state[p.empId] && state[p.empId][cat]) ? state[p.empId][cat] : {isDone:false};
     return `<tr><td><strong>${esc(p.name)}</strong> (${p.empId})</td><td>${esc(p.dept)} / ${esc(p.position)}</td><td class="col-cat"><button class="recv-btn ${s.isDone?'yes':''}" onclick="toggleRecvDirect('${p.empId}','${cat}','${esc(name)}')">${s.isDone?'✓':'○'}</button></td></tr>`;
   }).join('');
   document.getElementById('detail-bulk-ok').onclick = () => bulkAction(true, name);
   document.getElementById('detail-bulk-no').onclick = () => bulkAction(false, name);
 }
 
-function toggleRecvDirect(empId, cat, evidence) {
-  const s = state[empId][cat];
+async function toggleRecvDirect(empId, cat, evidence) {
+  const s = (state[empId] && state[empId][cat]) ? state[empId][cat] : {isDone:false};
   if(s.isDone) state[empId][cat] = {isDone:false, evidence:""};
   else state[empId][cat] = {isDone:true, evidence: evidence};
-  save(); render(); showProjDetail(evidence, cat);
+  await syncToCloud(); showProjDetail(evidence, cat);
 }
 
-function bulkAction(isRecv, forceProj = null) {
+async function bulkAction(isRecv, forceProj = null) {
   const q = forceProj || document.getElementById('q').value.trim().toLowerCase();
   if(!q) return alert("활동명을 입력하세요.");
-  let count = 0;
-  RAW_DATA.forEach(p => {
-    p.categories.forEach(cat => {
+  RAW_DATA.forEach(p => { p.categories.forEach(cat => {
       const match = (p.projects[cat] || []).find(pj => pj.toLowerCase().includes(q.toLowerCase()));
       if(match) {
-        if(isRecv && !state[p.empId][cat].isDone) { state[p.empId][cat] = {isDone:true, evidence:match}; count++; }
-        else if(!isRecv && state[p.empId][cat].isDone && state[p.empId][cat].evidence.toLowerCase().includes(q.toLowerCase())) { state[p.empId][cat] = {isDone:false, evidence:""}; count++; }
+        if(isRecv && (!state[p.empId] || !state[p.empId][cat] || !state[p.empId][cat].isDone)) { if(!state[p.empId]) state[p.empId]={}; state[p.empId][cat] = {isDone:true, evidence:match}; }
+        else if(!isRecv && state[p.empId] && state[p.empId][cat] && state[p.empId][cat].isDone && state[p.empId][cat].evidence.toLowerCase().includes(q.toLowerCase())) { state[p.empId][cat] = {isDone:false, evidence:""}; }
       }
-    });
-  });
-  save(); render(); if(forceProj) showProjDetail(forceProj, RAW_DATA.find(p=>Object.values(p.projects).flat().includes(forceProj)).categories.find(c=>p.projects[c].includes(forceProj)));
+  });});
+  await syncToCloud(); if(forceProj) showProjDetail(forceProj, RAW_DATA.find(p=>Object.values(p.projects).flat().includes(forceProj)).categories.find(c=>p.projects[c].includes(forceProj)));
 }
 
+async function clearCloudData() { if(confirm('클라우드의 모든 데이터를 초기화할까요?')) { RAW_DATA=[]; state={}; stocks={'농부':0,'스님':0,'주장':0,'제비':0,'키다리':0}; lastUpdate="데이터 없음"; await syncToCloud(); location.reload(); } }
+
 function exportToExcel() {
-  if (RAW_DATA.length === 0) return alert("내보낼 데이터가 없습니다.");
-  try {
-    const data = RAW_DATA.map(p => {
-      const row = { "회사": unesc(p.company), "성명": unesc(p.name), "사번": p.empId, "부서": unesc(p.dept), "직책": unesc(p.position) };
-      CATS.forEach(c => {
-        // 안전 장치 추가: 객체 존재 여부 확인
-        const s = (state[p.empId] && state[p.empId][c]) ? state[p.empId][c] : { isDone: false, evidence: "" };
-        row[`${c} 수령여부`] = s.isDone ? "완료" : "미수령";
-        row[`${c} 수령근거`] = unesc(s.evidence || "");
-      });
-      return row;
-    });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "수령현황");
-    const d = new Date();
-    const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `전사참여제_굿즈수령현황_${dateStr}.xlsx`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 100);
-  } catch (err) {
-    alert("다운로드 중 오류가 발생했습니다: " + err.message);
-  }
+  if (RAW_DATA.length === 0) return alert("데이터가 없습니다.");
+  const data = RAW_DATA.map(p => {
+    const row = { "회사": unesc(p.company), "성명": unesc(p.name), "사번": p.empId, "부서": unesc(p.dept), "직책": unesc(p.position) };
+    CATS.forEach(c => { const s = (state[p.empId] && state[p.empId][c]) ? state[p.empId][c] : { isDone: false, evidence: "" }; row[`${c} 수령여부`] = s.isDone ? "완료" : "미수령"; row[`${c} 수령근거`] = unesc(s.evidence || ""); });
+    return row;
+  });
+  const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "수령현황");
+  XLSX.writeFile(wb, `전사참여제_수령현황.xlsx`);
 }
 
 function setFilter(type, btn) { currentFilter = type; document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); render(); }
 function openTab(id) { document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active')); document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.getElementById(id).classList.add('active'); const tabs = ['manage', 'stocks', 'stats', 'projects', 'upload']; document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active'); }
-function save() { localStorage.setItem('goods_state', JSON.stringify(state)); localStorage.setItem('goods_raw', JSON.stringify(RAW_DATA)); localStorage.setItem('goods_stocks', JSON.stringify(stocks)); }
 function closeMo() { document.getElementById('mo').classList.remove('show'); }
-render();
+const dropZone = document.getElementById('drop-zone'); ['dragover', 'dragleave', 'drop'].forEach(evt => { dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); if (evt === 'drop' && e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]); }); });
 </script>
 </body>
 </html>
